@@ -1,0 +1,75 @@
+Yes! You can automate Philippine payroll salary computations using government-mandated formulas for deductions like SSS, PhilHealth, Pag-IBIG, and withholding tax. Here's a breakdown of where to get each and how to compute them for 2025:
+
+✅ 1. SSS (Social Security System)
+Resource: SSS Contribution Table 2025
+As of the 2024 table (unless updated in mid-2025), here's the general formula:
+
+Contribution Rate: 14% of the monthly salary credit (MSC), with a cap at ₱30,000.
+
+Employer: 9.5%
+
+Employee: 4.5%
+
+📌 Example for ₱24,000 salary:
+
+MSC: ₱24,000
+
+Total Contribution = ₱3,360
+
+Employee share = ₱1,080
+
+Employer share = ₱2,280
+
+✅ 2. PhilHealth
+Resource: PhilHealth Circulars
+As of 2025:
+
+Rate: 5% of monthly salary (split 50/50 by employer and employee)
+
+Salary floor: ₱10,000 | Ceiling: ₱100,000
+
+📌 ₱24,000 salary:
+
+5% of ₱24,000 = ₱1,200
+
+Employee share = ₱600
+
+Employer share = ₱600
+
+✅ 3. Pag-IBIG
+Resource: Pag-IBIG Official Site
+
+Standard contribution: 2% of monthly salary
+
+Capped at ₱5,000 (for most employers unless opted higher)
+
+Employee share: 2% (₱100 max)
+
+Employer share: 2% (₱100 max)
+
+📌 ₱24,000 salary:
+
+Employee share = ₱100
+
+Employer share = ₱100
+
+✅ 4. Withholding Tax (Based on TRAIN Law)
+Use BIR Revised Withholding Tax Table (Updated for 2023+, still applicable in 2025 unless announced otherwise)
+
+Taxable Income = Gross - SSS - PhilHealth - Pag-IBIG
+
+📌 Example Computation:
+
+Gross Salary = ₱24,000
+
+Total Deductions:
+
+SSS: ₱1,080
+
+PhilHealth: ₱600
+
+Pag-IBIG: ₱100
+
+Taxable Income = ₱22,220
+
+You’ll now use the BIR Monthly Withholding Tax Table to compute tax on ₱22,220.
