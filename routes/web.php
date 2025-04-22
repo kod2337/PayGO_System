@@ -19,11 +19,15 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/employees', [EmployeeController::class, 'store'])->name('employees.store');
     Route::get('/employees/create', [EmployeeController::class, 'create'])->name('employees.create');
     Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
-    Route::put('/employees/{employee}/allowances', [EmployeeController::class, 'updateAllowances'])->name('employees.update-allowances');
 });
 
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/payroll', [PayrollController::class, 'index'])->name('payroll.index');
+    
+    // Payroll routes
+    Route::post('/payroll/process', [PayrollController::class, 'processPayroll'])->name('payroll.process');
+    Route::post('/payroll/settings', [PayrollController::class, 'updateSettings'])->name('payroll.settings');
+    Route::put('/employees/{employee}/allowances', [EmployeeController::class, 'updateAllowances'])->name('employees.update-allowances');
 });
 
 // Redirect unauthenticated users to login

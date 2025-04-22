@@ -1,24 +1,21 @@
 <script setup>
+import { ref, nextTick } from 'vue';
 import Modal from '@/Components/Modal.vue';
 import SecondaryButton from '@/Components/SecondaryButton.vue';
 import PrimaryButton from '@/Components/PrimaryButton.vue';
 import AllowancesModal from '@/Components/AllowancesModal.vue';
-import { computed, ref } from 'vue';
+import Tooltip from '@/Components/Tooltip.vue';
+import KeyboardShortcuts from '@/Components/KeyboardShortcuts.vue';
+import SkeletonLoader from '@/Components/SkeletonLoader.vue';
 
 const props = defineProps({
-    show: {
-        type: Boolean,
-        required: true
-    },
-    employee: {
-        type: Object,
-        required: true
-    }
+    show: Boolean,
+    employee: Object
 });
 
 const emit = defineEmits(['close', 'allowances-updated']);
-
 const showAllowancesModal = ref(false);
+const isLoading = ref(false);
 
 const openAllowancesModal = () => {
     showAllowancesModal.value = true;
@@ -28,188 +25,290 @@ const closeAllowancesModal = () => {
     showAllowancesModal.value = false;
 };
 
-const handleAllowancesUpdated = () => {
+const handleAllowancesUpdated = async () => {
+    isLoading.value = true;
+    closeAllowancesModal();
+    await nextTick();
     emit('allowances-updated');
+    setTimeout(() => {
+        isLoading.value = false;
+    }, 500);
 };
 
-const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-PH', {
-        style: 'currency',
-        currency: 'PHP'
-    }).format(amount || 0);
+const formatCurrency = (value) => {
+    return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(value || 0);
 };
 
-const computationSteps = computed(() => {
-    const totalAllowances = Object.values(props.employee?.salary?.allowances || {}).reduce((a, b) => a + b, 0);
+const getDeductionDescription = (type) => {
+    const descriptions = {
+        tax: `Withholding tax based on annual income:
+• ₱0 - ₱250,000: 0%
+• ₱250,001 - ₱400,000: 20% of excess over ₱250,000
+• ₱400,001 - ₱800,000: ₱30,000 + 25% of excess over ₱400,000
+• ₱800,001 - ₱2M: ₱130,000 + 30% of excess over ₱800,000
+• ₱2M - ₱8M: ₱490,000 + 32% of excess over ₱2M
+• Over ₱8M: ₱2.41M + 35% of excess over ₱8M`,
+        sss: 'Social Security System (SSS) contribution: 4.5% of basic salary, capped at ₱900 monthly',
+        philhealth: 'PhilHealth Premium: 2.5% of basic salary (minimum contribution based on ₱10,000, maximum on ₱100,000)',
+        pagibig: 'Pag-IBIG Fund contribution: 2% of basic salary, capped at ₱100 monthly',
+    };
+    return descriptions[type.toLowerCase()] || 'Other deduction';
+};
+
+const getAllowanceDescription = (type) => {
+    const descriptions = {
+        transportation: 'Non-taxable transportation assistance for commuting expenses',
+        meal: 'Food and meal subsidy to cover work-related meal expenses',
+        cola: 'Cost of Living Adjustment (COLA) to help offset inflation and living expenses',
+    };
+    return descriptions[type.toLowerCase()] || 'Additional allowance';
+};
+
+const getTaxCalculation = (employee) => {
+    const basic = employee?.salary?.basic || 0;
+    const mandatoryDeductions = Object.values(employee?.salary?.deductions || {})
+        .reduce((sum, amount) => sum + Number(amount), 0);
+    const taxableIncome = basic - mandatoryDeductions;
+    const annual = taxableIncome * 12;
+
+    if (annual <= 250000) {
+        return 'Tax exempt - Annual taxable income below ₱250,000';
+    }
     
-    return [
-        { label: 'Basic Monthly Salary', value: props.employee?.salary?.basic || 0 },
-        { label: 'Total Monthly Allowances', value: totalAllowances },
-        { label: 'Gross Monthly Pay', value: props.employee?.salary?.grossPay || 0, isBold: true },
-        { label: 'Less: Mandatory Deductions', isHeader: true },
-        { label: 'SSS Contribution', value: props.employee?.salary?.deductions?.sss || 0, isDeduction: true },
-        { label: 'PhilHealth Contribution', value: props.employee?.salary?.deductions?.philhealth || 0, isDeduction: true },
-        { label: 'Pag-IBIG Contribution', value: props.employee?.salary?.deductions?.pagibig || 0, isDeduction: true },
-        { label: 'Total Mandatory Deductions', value: props.employee?.salary?.computation?.mandatoryDeductions || 0, isDeduction: true, isBold: true },
-        { label: 'Taxable Income', value: props.employee?.salary?.computation?.taxableIncome || 0, isBold: true },
-        { label: 'Withholding Tax', help: props.employee?.salary?.computation?.taxBracket, value: props.employee?.salary?.deductions?.tax || 0, isDeduction: true },
-        { label: 'Net Take Home Pay', value: props.employee?.salary?.netPay || 0, isTotal: true }
-    ];
-});
+    const calculateAnnualTax = () => {
+        if (annual <= 400000) {
+            return `20% of excess over ₱250,000\n(${formatCurrency(annual - 250000)} × 20% = ${formatCurrency((annual - 250000) * 0.20)} annually)`;
+        } else if (annual <= 800000) {
+            return `₱30,000 + 25% of excess over ₱400,000\n(₱30,000 + ${formatCurrency(annual - 400000)} × 25% = ${formatCurrency(30000 + (annual - 400000) * 0.25)} annually)`;
+        } else if (annual <= 2000000) {
+            return `₱130,000 + 30% of excess over ₱800,000\n(₱130,000 + ${formatCurrency(annual - 800000)} × 30% = ${formatCurrency(130000 + (annual - 800000) * 0.30)} annually)`;
+        } else if (annual <= 8000000) {
+            return `₱490,000 + 32% of excess over ₱2,000,000\n(₱490,000 + ${formatCurrency(annual - 2000000)} × 32% = ${formatCurrency(490000 + (annual - 2000000) * 0.32)} annually)`;
+        } else {
+            return `₱2,410,000 + 35% of excess over ₱8,000,000\n(₱2,410,000 + ${formatCurrency(annual - 8000000)} × 35% = ${formatCurrency(2410000 + (annual - 8000000) * 0.35)} annually)`;
+        }
+    };
+
+    return `Monthly taxable income: ${formatCurrency(taxableIncome)}\nAnnual taxable income: ${formatCurrency(annual)}\n${calculateAnnualTax()}\nMonthly withholding: ${formatCurrency(employee?.salary?.deductions?.tax || 0)}`;
+};
+
+const handlePrint = () => {
+    window.print();
+};
 </script>
 
 <template>
-    <Modal :show="show" @close="$emit('close')" max-width="4xl">
+    <Modal :show="show" @close="$emit('close')" maxWidth="4xl">
         <div class="p-6">
-            <!-- Header -->
-            <div class="flex justify-between items-start mb-8 pb-4 border-b">
-                <div>
-                    <h2 class="text-xl font-bold text-foreground">Payroll Computation Worksheet</h2>
-                    <div class="mt-1 flex items-center space-x-4">
-                        <p class="text-sm text-muted-foreground">Employee: <span class="font-medium text-foreground">{{ employee.name }}</span></p>
-                        <p class="text-sm text-muted-foreground">ID: <span class="font-medium text-foreground">{{ employee.employeeId }}</span></p>
-                    </div>
-                </div>
-                <div class="text-right">
-                    <p class="text-sm text-muted-foreground">Position</p>
-                    <p class="font-medium">{{ employee.position }}</p>
-                    <p class="text-sm text-muted-foreground mt-1">Department</p>
-                    <p class="font-medium">{{ employee.department }}</p>
+            <!-- Print Header (only visible when printing) -->
+            <div class="hidden print:block mb-8 text-center">
+                <h1 class="text-2xl font-bold mb-2">PayGO System</h1>
+                <p class="text-sm mb-1">Payroll Management System</p>
+                <p class="text-sm mb-4">Monthly Payroll Details</p>
+                <div class="border-t border-border pt-4 text-left">
+                    <p class="text-sm">Generated on: {{ new Date().toLocaleString() }}</p>
                 </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-12 gap-8">
-                <!-- Left Column - Computation Worksheet -->
-                <div class="md:col-span-7 space-y-6">
-                    <div class="bg-white rounded-lg border">
-                        <div class="px-4 py-3 border-b bg-gray-50">
-                            <h3 class="font-medium text-gray-900">Salary Computation Worksheet</h3>
-                        </div>
-                        <div class="p-4">
-                            <div class="space-y-3">
-                                <div v-for="(step, index) in computationSteps" :key="index"
-                                     :class="[
-                                         'flex justify-between items-center py-2',
-                                         step.isHeader ? 'mt-4' : '',
-                                         step.isDeduction ? 'text-red-600' : '',
-                                         step.isTotal ? 'pt-4 border-t border-gray-200 text-lg font-bold text-primary' : '',
-                                         step.isBold ? 'font-bold' : ''
-                                     ]">
-                                    <div class="flex items-center">
-                                        <span :class="[
-                                            step.isHeader ? 'font-medium' : 'text-sm',
-                                            step.isDeduction ? 'text-red-600' : 'text-gray-600'
-                                        ]">{{ step.label }}</span>
-                                        <span v-if="step.help" 
-                                              class="ml-2 text-xs text-gray-500 italic">
-                                            ({{ step.help }})
-                                        </span>
-                                    </div>
-                                    <span v-if="!step.isHeader" :class="[
-                                        step.isDeduction ? 'text-red-600' : '',
-                                        step.isBold ? 'font-bold' : '',
-                                        step.isTotal ? 'text-lg font-bold text-primary' : ''
-                                    ]">
-                                        {{ step.isDeduction ? '-' : '' }}{{ formatCurrency(step.value) }}
-                                    </span>
-                                </div>
-                            </div>
+            <!-- Header (hidden when printing) -->
+            <div class="print:hidden mb-6 border-b border-border pb-4">
+                <div class="flex justify-between items-start">
+                    <div>
+                        <h2 class="text-lg font-bold text-foreground">Payroll Details</h2>
+                        <div class="flex items-center gap-2 mt-1">
+                            <p class="text-sm text-muted-foreground">Employee: <span class="font-medium text-foreground">{{ employee?.name }}</span></p>
+                            <span class="text-muted-foreground">•</span>
+                            <p class="text-sm text-muted-foreground">ID: <span class="font-medium text-foreground">{{ employee?.employeeId }}</span></p>
                         </div>
                     </div>
-                </div>
-
-                <!-- Right Column - Summary and Details -->
-                <div class="md:col-span-5 space-y-6">
-                    <!-- Basic Info Card -->
-                    <div class="bg-primary/5 p-4 rounded-lg">
-                        <h3 class="font-medium text-primary mb-3">Monthly Overview</h3>
-                        <div class="grid grid-cols-2 gap-4">
-                            <div>
-                                <p class="text-sm text-muted-foreground">Basic Salary</p>
-                                <p class="font-bold">{{ formatCurrency(employee?.salary?.basic || 0) }}</p>
-                            </div>
-                            <div>
-                                <p class="text-sm text-muted-foreground">Gross Pay</p>
-                                <p class="font-bold">{{ formatCurrency(employee?.salary?.grossPay || 0) }}</p>
-                            </div>
-                            <div>
-                                <p class="text-sm text-muted-foreground">Total Deductions</p>
-                                <p class="font-bold text-red-600">{{ formatCurrency(employee?.salary?.deductions?.total || 0) }}</p>
-                            </div>
-                            <div>
-                                <p class="text-sm text-muted-foreground">Net Pay</p>
-                                <p class="font-bold text-primary">{{ formatCurrency(employee?.salary?.netPay || 0) }}</p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Allowances -->
-                    <div class="bg-white rounded-lg border">
-                        <div class="px-4 py-3 border-b flex justify-between items-center">
-                            <h3 class="font-medium text-gray-900">Monthly Allowances</h3>
-                            <button 
-                                @click="openAllowancesModal"
-                                class="text-sm text-primary hover:text-primary/80 font-medium"
-                            >
-                                Edit Allowances
-                            </button>
-                        </div>
-                        <div class="p-4">
-                            <div class="space-y-3">
-                                <div v-for="(amount, type) in (employee?.salary?.allowances || {})" 
-                                     :key="type"
-                                     class="flex justify-between items-center py-2 border-b border-gray-100 last:border-0">
-                                    <span class="text-sm text-gray-600 capitalize">{{ type }}</span>
-                                    <span class="font-medium">{{ formatCurrency(amount || 0) }}</span>
-                                </div>
-                                <div v-if="!Object.keys(employee?.salary?.allowances || {}).length" 
-                                     class="text-sm text-gray-500 text-center py-2">
-                                    No allowances
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Tax Information -->
-                    <div class="bg-white rounded-lg border">
-                        <div class="px-4 py-3 border-b">
-                            <h3 class="font-medium text-gray-900">Tax Information</h3>
-                        </div>
-                        <div class="p-4">
-                            <div class="space-y-3">
-                                <div>
-                                    <p class="text-sm text-gray-600">Tax Bracket</p>
-                                    <p class="font-medium">{{ employee?.salary?.computation?.taxBracket || 'Not applicable' }}</p>
-                                </div>
-                                <div>
-                                    <p class="text-sm text-gray-600">Monthly Taxable Income</p>
-                                    <p class="font-medium">{{ formatCurrency(employee?.salary?.computation?.taxableIncome || 0) }}</p>
-                                </div>
-                                <div>
-                                    <p class="text-sm text-gray-600">Withholding Tax</p>
-                                    <p class="font-medium text-red-600">{{ formatCurrency(employee?.salary?.deductions?.tax || 0) }}</p>
-                                </div>
-                            </div>
-                        </div>
+                    <div class="flex items-center gap-2">
+                        <SecondaryButton @click="handlePrint" class="gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                                <path fill-rule="evenodd" d="M5 2.75C5 1.784 5.784 1 6.75 1h6.5c.966 0 1.75.784 1.75 1.75v3.552c.377.046.752.097 1.126.153A2.212 2.212 0 0118 8.653v4.097A2.25 2.25 0 0115.75 15h-.241l.305 1.984A1.75 1.75 0 0114.084 19H5.915a1.75 1.75 0 01-1.73-2.016L4.492 15H4.25A2.25 2.25 0 012 12.75V8.653c0-1.082.775-2.034 1.874-2.198.374-.056.75-.107 1.127-.153L5 6.25v-3.5zm8.5 3.397a41.533 41.533 0 00-7 0V2.75a.25.25 0 01.25-.25h6.5a.25.25 0 01.25.25v3.397zM6.608 12.5a.25.25 0 00-.247.212l-.693 4.5a.25.25 0 00.247.288h8.17a.25.25 0 00.246-.288l-.692-4.5a.25.25 0 00-.247-.212H6.608z" clip-rule="evenodd" />
+                            </svg>
+                            Print
+                        </SecondaryButton>
+                        <PrimaryButton @click="openAllowancesModal" class="gap-2">
+                            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" class="w-4 h-4">
+                                <path d="M10.75 4.75a.75.75 0 00-1.5 0v4.5h-4.5a.75.75 0 000 1.5h4.5v4.5a.75.75 0 001.5 0v-4.5h4.5a.75.75 0 000-1.5h-4.5v-4.5z" />
+                            </svg>
+                            Update Allowances
+                        </PrimaryButton>
                     </div>
                 </div>
             </div>
 
-            <div class="mt-8 pt-4 border-t flex justify-between items-center">
-                <p class="text-sm text-muted-foreground">
-                    * Tax computation based on TRAIN Law
-                </p>
-                <div class="flex gap-2">
+            <!-- Content -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 lg:gap-8">
+                <!-- Left column -->
+                <div class="space-y-4">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-accent/5">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Type</th>
+                                    <th class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border">
+                                <template v-if="isLoading">
+                                    <tr v-for="n in 4" :key="n">
+                                        <td class="px-4 py-3">
+                                            <div>
+                                                <SkeletonLoader class="h-5 w-32 mb-2" />
+                                                <SkeletonLoader class="h-4 w-24" />
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <SkeletonLoader class="h-5 w-24 ml-auto" />
+                                        </td>
+                                    </tr>
+                                </template>
+                                <template v-else>
+                                    <tr>
+                                        <td class="px-4 py-3">
+                                            <div>
+                                                <div class="font-medium">Basic Pay</div>
+                                                <div class="text-sm text-muted-foreground">Monthly base salary</div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <span class="font-semibold">{{ formatCurrency(employee?.salary?.basic) }}</span>
+                                        </td>
+                                    </tr>
+                                    <tr v-for="(amount, type) in employee?.salary?.allowances" :key="type">
+                                        <td class="px-4 py-3">
+                                            <div>
+                                                <div class="font-medium capitalize">{{ type.replace('_', ' ') }}</div>
+                                                <div class="text-sm text-muted-foreground">{{ getAllowanceDescription(type) }}</div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <span class="font-semibold text-[hsl(var(--success-text))]">+{{ formatCurrency(amount) }}</span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                            <tfoot class="bg-accent/5">
+                                <tr>
+                                    <td class="px-4 py-3 font-medium">Gross Pay</td>
+                                    <td class="px-4 py-3 text-right font-bold">{{ formatCurrency(employee?.salary?.monthly?.gross) }}</td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- Right column -->
+                <div class="space-y-4">
+                    <div class="overflow-x-auto">
+                        <table class="w-full">
+                            <thead class="bg-accent/5">
+                                <tr>
+                                    <th class="px-4 py-2 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Deductions</th>
+                                    <th class="px-4 py-2 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Amount</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-border">
+                                <template v-if="isLoading">
+                                    <tr v-for="n in 4" :key="n">
+                                        <td class="px-4 py-3">
+                                            <div>
+                                                <SkeletonLoader class="h-5 w-32 mb-2" />
+                                                <SkeletonLoader class="h-4 w-48" />
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <SkeletonLoader class="h-5 w-24 ml-auto" />
+                                        </td>
+                                    </tr>
+                                </template>
+                                <template v-else>
+                                    <tr v-for="(amount, type) in employee?.salary?.deductions" :key="type">
+                                        <td class="px-4 py-3">
+                                            <div>
+                                                <div class="font-medium uppercase">{{ type }}</div>
+                                                <div class="text-sm text-muted-foreground whitespace-pre-line">
+                                                    {{ type.toLowerCase() === 'tax' ? getTaxCalculation(employee) : getDeductionDescription(type) }}
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <td class="px-4 py-3 text-right">
+                                            <span class="font-semibold text-[hsl(var(--error-text))]">-{{ formatCurrency(amount) }}</span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                            <tfoot class="bg-accent/5">
+                                <tr>
+                                    <td class="px-4 py-3 font-medium">Total Deductions</td>
+                                    <td class="px-4 py-3 text-right font-bold text-[hsl(var(--error-text))]">
+                                        -{{ formatCurrency(employee?.salary?.monthly?.deductions) }}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Summary -->
+            <div class="mt-6 bg-primary/5 rounded-lg p-4 border-2 border-primary">
+                <div class="flex flex-col sm:flex-row justify-between items-center gap-4">
+                    <div>
+                        <h3 class="text-lg font-semibold">Net Pay</h3>
+                        <p class="text-sm text-muted-foreground">Final take-home amount</p>
+                    </div>
+                    <div class="text-right" v-if="isLoading">
+                        <SkeletonLoader class="h-4 w-32 mb-2" />
+                        <SkeletonLoader class="h-8 w-40" />
+                    </div>
+                    <div class="text-right" v-else>
+                        <div class="text-sm text-muted-foreground mb-1">Monthly Net Salary</div>
+                        <div class="text-2xl font-bold text-primary">
+                            {{ formatCurrency(employee?.salary?.monthly?.net) }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Print footer with signatures (only visible when printing) -->
+            <div class="hidden print:block mt-12">
+                <div class="grid grid-cols-2 gap-12">
+                    <div class="text-center">
+                        <div class="border-t border-border w-48 mx-auto mt-12"></div>
+                        <p class="mt-2 text-sm font-medium">Employee Signature</p>
+                        <p class="text-xs text-muted-foreground">Date: _________________</p>
+                    </div>
+                    <div class="text-center">
+                        <div class="border-t border-border w-48 mx-auto mt-12"></div>
+                        <p class="mt-2 text-sm font-medium">HR Manager Signature</p>
+                        <p class="text-xs text-muted-foreground">Date: _________________</p>
+                    </div>
+                </div>
+                <div class="mt-8 pt-4 border-t border-border text-xs text-muted-foreground">
+                    <p>This is a computer-generated document. No signature is required.</p>
+                    <p>For questions about this payroll, please contact HR department.</p>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="mt-6 flex flex-col space-y-2 pt-4 border-t border-border">
+                <div class="flex justify-end">
                     <SecondaryButton @click="$emit('close')">Close</SecondaryButton>
                 </div>
+                <KeyboardShortcuts :shortcuts="[
+                    { keys: ['Esc'], action: 'Close dialog' }
+                ]" />
             </div>
         </div>
-    </Modal>
 
-    <AllowancesModal
-        :show="showAllowancesModal"
-        :employee="employee"
-        @close="closeAllowancesModal"
-        @updated="handleAllowancesUpdated"
-    />
+        <!-- Nested Allowances Modal -->
+        <AllowancesModal
+            :show="showAllowancesModal"
+            :employee="employee"
+            @close="closeAllowancesModal"
+            @updated="handleAllowancesUpdated"
+        />
+    </Modal>
 </template>

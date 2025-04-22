@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted } from 'vue';
+import { computed, onMounted, onUnmounted, ref, nextTick, watch } from 'vue';
 
 const props = defineProps({
     show: {
@@ -17,19 +17,18 @@ const props = defineProps({
 });
 
 const emit = defineEmits(['close']);
+const modalRef = ref(null);
+let previousActiveElement = null;
 
-const close = (e) => {
+const close = () => {
     if (!props.closeable) return;
-    
-    if (e.type === 'keydown') {
-        if (e.key === 'Escape') {
-            e.preventDefault();
-            emit('close');
-        }
-        return;
-    }
-    
     emit('close');
+};
+
+const closeOnEscape = (e) => {
+    if (e.key === 'Escape' && props.show) {
+        close();
+    }
 };
 
 const maxWidthClass = computed(() => {
@@ -47,12 +46,57 @@ const maxWidthClass = computed(() => {
     }[props.maxWidth];
 });
 
+const focusFirstInput = () => {
+    nextTick(() => {
+        const focusable = modalRef.value?.querySelector('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+        if (focusable) {
+            focusable.focus();
+        }
+    });
+};
+
+const handleTabbing = (e) => {
+    if (!modalRef.value || e.key !== 'Tab') return;
+
+    const focusable = modalRef.value.querySelectorAll('button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])');
+    const firstFocusable = focusable[0];
+    const lastFocusable = focusable[focusable.length - 1];
+
+    if (e.shiftKey) {
+        if (document.activeElement === firstFocusable) {
+            lastFocusable.focus();
+            e.preventDefault();
+        }
+    } else {
+        if (document.activeElement === lastFocusable) {
+            firstFocusable.focus();
+            e.preventDefault();
+        }
+    }
+};
+
+watch(() => props.show, (show) => {
+    if (show) {
+        previousActiveElement = document.activeElement;
+        document.body.style.overflow = 'hidden';
+        focusFirstInput();
+    } else {
+        document.body.style.overflow = '';
+        if (previousActiveElement) {
+            previousActiveElement.focus();
+        }
+    }
+});
+
 onMounted(() => {
-    document.addEventListener('keydown', close);
+    document.addEventListener('keydown', closeOnEscape);
+    document.addEventListener('keydown', handleTabbing);
 });
 
 onUnmounted(() => {
-    document.removeEventListener('keydown', close);
+    document.removeEventListener('keydown', closeOnEscape);
+    document.removeEventListener('keydown', handleTabbing);
+    document.body.style.overflow = '';
 });
 </script>
 
@@ -60,12 +104,15 @@ onUnmounted(() => {
     <Teleport to="body">
         <div v-if="show" class="fixed inset-0 overflow-y-auto px-4 py-6 sm:px-0 z-50">
             <div class="fixed inset-0 transform transition-all" @click="close">
-                <div class="absolute inset-0 bg-gray-500/75"></div>
+                <div class="absolute inset-0 bg-gray-500/75 dark:bg-gray-900/90"></div>
             </div>
 
             <div
-                class="mb-6 bg-white rounded-lg overflow-hidden shadow-xl transform transition-all sm:w-full sm:mx-auto"
+                ref="modalRef"
+                class="mb-6 bg-background rounded-lg overflow-hidden shadow-xl transform transition-all sm:w-full sm:mx-auto"
                 :class="maxWidthClass"
+                role="dialog"
+                aria-modal="true"
             >
                 <slot />
             </div>

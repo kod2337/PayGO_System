@@ -215,6 +215,6 @@ class EmployeeController extends Controller
             'cola' => $validated['cola'],
         ]);
 
-        return back()->with('success', 'Allowances updated successfully');
+        return redirect()->back()->with('success', 'Allowances updated successfully');
     }
 }

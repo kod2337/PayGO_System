@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class EmployeeSalary extends Model
 {
@@ -17,26 +18,18 @@ class EmployeeSalary extends Model
         'transportation_allowance',
         'meal_allowance',
         'cola',
-        'sss_contribution',
-        'philhealth_contribution',
-        'pagibig_contribution',
-        'tax_withheld'
     ];
 
     protected $casts = [
-        'basic_salary' => 'decimal:2',
-        'daily_rate' => 'decimal:2',
-        'hourly_rate' => 'decimal:2',
-        'transportation_allowance' => 'decimal:2',
-        'meal_allowance' => 'decimal:2',
-        'cola' => 'decimal:2',
-        'sss_contribution' => 'decimal:2',
-        'philhealth_contribution' => 'decimal:2',
-        'pagibig_contribution' => 'decimal:2',
-        'tax_withheld' => 'decimal:2'
+        'basic_salary' => 'float',
+        'daily_rate' => 'float',
+        'hourly_rate' => 'float',
+        'transportation_allowance' => 'float',
+        'meal_allowance' => 'float',
+        'cola' => 'float',
     ];
 
-    public function employee()
+    public function employee(): BelongsTo
     {
         return $this->belongsTo(Employee::class);
     }

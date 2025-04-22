@@ -13,6 +13,9 @@ return new class extends Migration
             $table->date('start_date');
             $table->date('end_date');
             $table->string('status')->default('pending'); // pending, processing, completed
+            $table->string('frequency')->default('monthly'); // monthly, semi-monthly, bi-weekly
+            $table->boolean('is_automated')->default(false);
+            $table->date('next_schedule')->nullable();
             $table->timestamps();
         });
 
