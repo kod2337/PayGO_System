@@ -3,6 +3,7 @@
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\EmployeeController;
+use App\Http\Controllers\PayrollController;
 use Illuminate\Foundation\Application;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -18,6 +19,11 @@ Route::middleware(['auth'])->group(function () {
     Route::post('/employees', [EmployeeController::class, 'store'])->name('employees.store');
     Route::get('/employees/create', [EmployeeController::class, 'create'])->name('employees.create');
     Route::get('/employees/{employee}', [EmployeeController::class, 'show'])->name('employees.show');
+    Route::put('/employees/{employee}/allowances', [EmployeeController::class, 'updateAllowances'])->name('employees.update-allowances');
+});
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/payroll', [PayrollController::class, 'index'])->name('payroll.index');
 });
 
 // Redirect unauthenticated users to login

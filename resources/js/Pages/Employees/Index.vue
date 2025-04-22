@@ -4,7 +4,6 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout.vue';
 import Card from '@/Components/ui/card.vue';
 import EmployeeDetailsModal from '@/Components/EmployeeDetailsModal.vue';
 import { ref } from 'vue';
-import { calculateDeductions } from '@/Utils/payrollCalculations';
 
 const props = defineProps({
     employees: {
@@ -17,44 +16,12 @@ const props = defineProps({
     }
 });
 
-// Calculate total compensation
-const calculateTotalCompensation = (salary) => {
-    if (!salary) return { gross: 0, net: 0, totalBenefits: 0, monthly: { net: 0 } };
-    
-    const totalAllowances = Object.values(salary.allowances || {}).reduce((a, b) => a + b, 0);
-    const totalDeductions = Object.values(salary.deductions || {}).reduce((a, b) => a + b, 0);
-    const totalBenefits = Object.values(salary.benefits || {}).reduce((a, b) => a + b, 0);
-    
-    // Monthly net calculation (excluding 13th month)
-    const monthlyNet = salary.basic + totalAllowances - totalDeductions;
-    
-    return {
-        gross: salary.basic + totalAllowances,
-        net: monthlyNet,
-        totalBenefits: totalBenefits,
-        monthly: {
-            net: monthlyNet
-        }
-    };
-};
-
-// Calculate totals for stats
-const totalPayroll = (props.employees || []).reduce((total, emp) => {
-    return total + calculateTotalCompensation(emp.salary).net;
-}, 0);
-
-const averageSalary = props.employees?.length 
-    ? totalPayroll / props.employees.length 
-    : 0;
-
 const selectedEmployee = ref(null);
 const showDetailsModal = ref(false);
 
 const openDetailsModal = (employee) => {
-    console.log('Opening modal for employee:', employee);
     selectedEmployee.value = employee;
     showDetailsModal.value = true;
-    console.log('Modal state:', { selectedEmployee: selectedEmployee.value, showDetailsModal: showDetailsModal.value });
 };
 
 const closeDetailsModal = () => {
@@ -85,18 +52,10 @@ const closeDetailsModal = () => {
             </div>
 
             <!-- Quick Stats -->
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div class="grid grid-cols-1 md:grid-cols-1 gap-4 mb-6">
                 <Card class="p-4 bg-primary/5">
                     <h3 class="text-sm font-medium text-muted-foreground">Total Employees</h3>
                     <p class="text-2xl font-bold">{{ employees.length }}</p>
-                </Card>
-                <Card class="p-4 bg-primary/5">
-                    <h3 class="text-sm font-medium text-muted-foreground">Total Monthly Payroll</h3>
-                    <p class="text-2xl font-bold">₱{{ totalPayroll.toLocaleString() }}</p>
-                </Card>
-                <Card class="p-4 bg-primary/5">
-                    <h3 class="text-sm font-medium text-muted-foreground">Average Salary</h3>
-                    <p class="text-2xl font-bold">₱{{ averageSalary.toLocaleString() }}</p>
                 </Card>
             </div>
 
@@ -116,8 +75,7 @@ const closeDetailsModal = () => {
                             <tr>
                                 <th class="text-left p-4">Employee</th>
                                 <th class="text-left p-4">Position</th>
-                                <th class="text-left p-4">Basic Salary</th>
-                                <th class="text-left p-4">Net Salary</th>
+                                <th class="text-left p-4">Department</th>
                                 <th class="text-left p-4">Actions</th>
                             </tr>
                         </thead>
@@ -129,14 +87,8 @@ const closeDetailsModal = () => {
                                         <p class="text-sm text-muted-foreground">{{ employee.employeeId }}</p>
                                     </div>
                                 </td>
-                                <td class="p-4">
-                                    <div>
-                                        <p class="font-medium">{{ employee.position }}</p>
-                                        <p class="text-sm text-muted-foreground">{{ employee.department }}</p>
-                                    </div>
-                                </td>
-                                <td class="p-4">₱{{ employee.salary.basic.toLocaleString() }}</td>
-                                <td class="p-4">₱{{ employee.salary.monthly.net.toLocaleString() }}</td>
+                                <td class="p-4">{{ employee.position }}</td>
+                                <td class="p-4">{{ employee.department }}</td>
                                 <td class="p-4">
                                     <button 
                                         @click="openDetailsModal(employee)"
@@ -156,7 +108,6 @@ const closeDetailsModal = () => {
         <EmployeeDetailsModal
             :show="showDetailsModal"
             :employee="selectedEmployee || {}"
-            :calculateTotalCompensation="calculateTotalCompensation"
             @close="closeDetailsModal"
         />
     </AuthenticatedLayout>

@@ -18,6 +18,7 @@ const props = defineProps({
 
 const closeOnEscape = (e) => {
     if (open.value && e.key === 'Escape') {
+        e.stopPropagation(); // Stop event from bubbling up
         open.value = false;
     }
 };
@@ -72,11 +73,8 @@ const open = ref(false);
                 style="display: none"
                 @click="open = false"
             >
-                <div
-                    class="rounded-md ring-1 ring-black ring-opacity-5"
-                    :class="contentClasses"
-                >
-                    <slot name="content" />
+                <div :class="[contentClasses, 'rounded-md ring-1 ring-black ring-opacity-5']">
+                    <slot />
                 </div>
             </div>
         </Transition>

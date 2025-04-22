@@ -26,7 +26,14 @@ class EmployeeSalary extends Model
     protected $casts = [
         'basic_salary' => 'decimal:2',
         'daily_rate' => 'decimal:2',
-        'hourly_rate' => 'decimal:2'
+        'hourly_rate' => 'decimal:2',
+        'transportation_allowance' => 'decimal:2',
+        'meal_allowance' => 'decimal:2',
+        'cola' => 'decimal:2',
+        'sss_contribution' => 'decimal:2',
+        'philhealth_contribution' => 'decimal:2',
+        'pagibig_contribution' => 'decimal:2',
+        'tax_withheld' => 'decimal:2'
     ];
 
     public function employee()

@@ -7,6 +7,7 @@ use App\Models\EmployeeSalary;
 use App\Models\Benefit;
 use App\Models\LeaveCredit;
 use App\Models\PayrollRecord;
+use App\Models\PayrollPeriod; // Add this lineine exists and is correct
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 
@@ -97,13 +98,12 @@ class EmployeeController extends Controller
     public function store(Request $request)
     {
         \Log::info('Creating new employee:', $request->all());
-
         $validated = $request->validate([
             'first_name' => 'required|string|max:255',
             'last_name' => 'required|string|max:255',
             'middle_name' => 'nullable|string|max:255',
             'suffix' => 'nullable|string|max:10',
-            'birth_date' => 'required|date',
+            'birth_date' => 'required|date',    
             'gender' => 'required|in:male,female',
             'civil_status' => 'required|string',
             'nationality' => 'required|string',
@@ -154,8 +154,19 @@ class EmployeeController extends Controller
             $pagibig = min($request->basic_salary * 0.02, 100); // 2%
             $totalDeductions = $sss + $philhealth + $pagibig;
 
+            // Get or create current payroll period
+            $payrollPeriod = PayrollPeriod::firstOrCreate(
+                [
+                    'status' => 'processing',
+                    'start_date' => now()->startOfMonth(),
+                    'end_date' => now()->endOfMonth(),
+                ],
+                ['status' => 'processing']
+            );
+
             // Create initial payroll record
             PayrollRecord::create([
+                'payroll_period_id' => $payrollPeriod->id, // Ensure this field is set
                 'employee_id' => $employee->id,
                 'basic_pay' => $request->basic_salary,
                 'sss_contribution' => $sss,
@@ -188,5 +199,22 @@ class EmployeeController extends Controller
             \Log::error('Error creating employee:', ['error' => $e->getMessage()]);
             throw $e;
         }
+    }
+
+    public function updateAllowances(Request $request, Employee $employee)
+    {
+        $validated = $request->validate([
+            'transportation_allowance' => 'required|numeric|min:0|decimal:0,2',
+            'meal_allowance' => 'required|numeric|min:0|decimal:0,2',
+            'cola' => 'required|numeric|min:0|decimal:0,2',
+        ]);
+
+        $employee->salary->update([
+            'transportation_allowance' => $validated['transportation_allowance'],
+            'meal_allowance' => $validated['meal_allowance'],
+            'cola' => $validated['cola'],
+        ]);
+
+        return back()->with('success', 'Allowances updated successfully');
     }
 }
