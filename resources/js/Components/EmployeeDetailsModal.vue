@@ -21,6 +21,7 @@ defineEmits(['close']);
         <div class="p-6">
             <h2 class="text-lg font-bold text-foreground mb-4">Employee Details</h2>
             
+            
             <div class="space-y-4">
                 <!-- Personal Information -->
                 <div class="space-y-4">
