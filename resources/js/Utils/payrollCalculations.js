@@ -30,7 +30,7 @@ export const calculateDeductions = (basicSalary) => {
         tax = 0;
     } else if (monthlyTaxableIncome <= 33333) { // 400,000 / 12
         tax = (monthlyTaxableIncome - 20833) * 0.20;
-    } else if (monthlyTaxableIncome <= 66667) { // 800,000 / 12
+    } else if (monthlyTaxableIncome <= 66667) { // 8    00,000 / 12
         tax = 2500 + (monthlyTaxableIncome - 33333) * 0.25;
     } else if (monthlyTaxableIncome <= 166667) { // 2,000,000 / 12
         tax = 10833.33 + (monthlyTaxableIncome - 66667) * 0.30;

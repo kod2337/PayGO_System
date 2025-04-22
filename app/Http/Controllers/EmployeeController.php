@@ -125,18 +125,45 @@ class EmployeeController extends Controller
         try {
             \DB::beginTransaction();
 
-            // Generate employee ID
-            $latestEmployee = Employee::latest()->first();
-            $nextId = $latestEmployee ? intval(substr($latestEmployee->employee_id, 8)) + 1 : 1;
-            $employeeId = 'EMP-' . date('Y') . '-' . str_pad($nextId, 3, '0', STR_PAD_LEFT);
+            // Update the employee ID generation logic
+            $currentYear = date('Y');
+            $sequence = 1;
 
-            // Create employee
+            // Get the latest employee ID for the current year
+            $latestEmployee = Employee::where('employee_id', 'like', "EMP-{$currentYear}-%")
+                ->orderBy('employee_id', 'desc')
+                ->first();
+
+            if ($latestEmployee) {
+                // Extract the sequence number from the latest ID and increment it
+                $lastSequence = (int) substr($latestEmployee->employee_id, -3);
+                $sequence = $lastSequence + 1;
+
+                // If we've reached 999, we need to handle overflow
+                if ($sequence > 999) {
+                    throw new \Exception('Employee ID sequence limit reached for the current year.');
+                }
+            }
+
+            // Format the new employee ID with padded zeros
+            $employeeId = sprintf("EMP-%d-%03d", $currentYear, $sequence);
+
+            // Verify the ID is unique before using it
+            while (Employee::where('employee_id', $employeeId)->exists()) {
+                $sequence++;
+                if ($sequence > 999) {
+                    throw new \Exception('Employee ID sequence limit reached for the current year.');
+                }
+                $employeeId = sprintf("EMP-%d-%03d", $currentYear, $sequence);
+            }
+
+            // Create employee with the verified unique ID
             $employee = Employee::create(array_merge(
                 $request->except('basic_salary'),
                 ['employee_id' => $employeeId]
             ));
 
-            \Log::info('Employee created:', ['id' => $employee->id]);
+            \Log::info('Employee created:', ['id' => $employee->id, 'employee_id' => $employeeId]);
 
             // Create salary record
             $salary = EmployeeSalary::create([
