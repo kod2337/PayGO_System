@@ -13,80 +13,106 @@ class PayrollPeriod extends Model
     protected $fillable = [
         'start_date',
         'end_date',
-        'status',
         'frequency',
         'is_automated',
-        'next_schedule'
+        'status'
     ];
 
     protected $casts = [
         'start_date' => 'date',
         'end_date' => 'date',
-        'next_schedule' => 'date',
-        'is_automated' => 'boolean'
+        'is_automated' => 'boolean',
     ];
+
+    public static function generateInitialPeriod($frequency)
+    {
+        $now = now();
+        $startDate = $now->copy()->startOfMonth();
+        $endDate = $now->copy()->endOfMonth();
+
+        if ($frequency === 'semi-monthly') {
+            if ($now->day <= 15) {
+                $endDate = $now->copy()->setDay(15);
+            } else {
+                $startDate = $now->copy()->setDay(16);
+            }
+        } elseif ($frequency === 'bi-weekly') {
+            $startDate = $now->copy()->startOfWeek();
+            $endDate = $startDate->copy()->addDays(13);
+        }
+
+        return self::create([
+            'start_date' => $startDate,
+            'end_date' => $endDate,
+            'frequency' => $frequency,
+            'status' => 'pending',
+            'is_automated' => false
+        ]);
+    }
 
     public function payrollRecords()
     {
         return $this->hasMany(PayrollRecord::class);
     }
 
-    public static function generateInitialPeriod($frequency = 'monthly')
-    {
-        $now = now();
-        $start = $now->copy()->startOfMonth();
-        $end = $now->copy()->endOfMonth();
-
-        return static::create([
-            'start_date' => $start,
-            'end_date' => $end,
-            'status' => 'pending',
-            'frequency' => $frequency,
-            'is_automated' => false
-        ]);
-    }
-
     public function markAsCompleted()
     {
         $this->status = 'completed';
         $this->save();
-        
-        // Create next period if automated
+
+        // If automated, create next period
         if ($this->is_automated) {
-            $nextPeriod = $this->calculateNextPeriod();
-            static::create($nextPeriod);
+            $this->createNextPeriod();
         }
     }
 
-    public function calculateNextPeriod()
+    public function createNextPeriod()
     {
-        $start = Carbon::parse($this->end_date)->addDay();
-        
+        $nextStart = $this->end_date->addDay();
+        $nextEnd = null;
+
         switch ($this->frequency) {
-            case 'bi-weekly':
-                $end = $start->copy()->addDays(13);
+            case 'monthly':
+                $nextEnd = $nextStart->copy()->endOfMonth();
                 break;
             case 'semi-monthly':
-                // If start is 1st, end on 15th. If start is 16th, end on last day of month
-                if ($start->day === 1) {
-                    $end = $start->copy()->setDay(15);
+                if ($nextStart->day === 1) {
+                    $nextEnd = $nextStart->copy()->setDay(15);
                 } else {
-                    $end = $start->copy()->endOfMonth();
+                    $nextEnd = $nextStart->copy()->endOfMonth();
                 }
                 break;
-            case 'monthly':
-            default:
-                $end = $start->copy()->endOfMonth();
+            case 'bi-weekly':
+                $nextEnd = $nextStart->copy()->addDays(13);
                 break;
         }
 
-        return [
-            'start_date' => $start,
-            'end_date' => $end,
+        return self::create([
+            'start_date' => $nextStart,
+            'end_date' => $nextEnd,
             'frequency' => $this->frequency,
             'is_automated' => $this->is_automated,
-            'status' => 'pending',
-            'next_schedule' => $end->copy()->addDay()
-        ];
+            'status' => 'pending'
+        ]);
+    }
+
+    public function getDaysInPeriod()
+    {
+        return $this->start_date->diffInDays($this->end_date) + 1;
+    }
+
+    public function getWorkdaysInPeriod()
+    {
+        $workdays = 0;
+        $current = $this->start_date->copy();
+        
+        while ($current->lte($this->end_date)) {
+            if ($current->isWeekday()) {
+                $workdays++;
+            }
+            $current->addDay();
+        }
+        
+        return $workdays;
     }
 }

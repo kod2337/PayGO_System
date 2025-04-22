@@ -40,13 +40,27 @@ class EmployeeController extends Controller
                 // Calculate 13th month pay (but don't include in monthly net)
                 $thirteenthMonth = $basic / 12;
 
-                return [
-                    'id' => $employee->id,
-                    'name' => $employee->full_name,
-                    'position' => $employee->position,
-                    'department' => $employee->department,
-                    'employeeId' => $employee->employee_id,
-                    'status' => $employee->employment_status,
+                    return [
+                        'id' => $employee->id,
+                        'name' => $employee->full_name,
+                        'position' => $employee->position,
+                        'department' => $employee->department,
+                        'employeeId' => $employee->employee_id,
+                        'status' => $employee->employment_status,
+                        'dateHired' => $employee->date_hired->format('F j, Y'),
+                        'birthDate' => $employee->birth_date->format('F j, Y'),
+                        'SSS' => $employee->sss_number,
+                        'PhilHealth' => $employee->philhealth_number,
+                        'PagIbig' => $employee->pagibig_number,
+                        'TIN' => $employee->tin_number,
+                        'civilStatus' => $employee->civil_status,
+                        'nationality' => $employee->nationality,
+                        'address' => $employee->address,
+                        'contactNumber' => $employee->contact_number,
+                        'emergencyContactName' => $employee->emergency_contact_name,
+                        'emergencyContactNumber' => $employee->emergency_contact_number,
+                        'email' => $employee->email,
+                        
                     'salary' => [
                         'basic' => $basic,
                         'allowances' => $monthlyAllowances,

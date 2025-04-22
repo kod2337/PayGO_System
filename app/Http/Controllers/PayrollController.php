@@ -15,49 +15,159 @@ class PayrollController extends Controller
     {
         $currentYear = now()->year;
         $currentMonth = now()->month;
+        $currentPeriod = $this->getCurrentPayrollPeriod();
+        $frequency = $currentPeriod['frequency'] ?? 'monthly';
 
-        return collect(range(1, 12))->map(function($month) use ($currentYear, $currentMonth) {
-            $date = Carbon::create($currentYear, $month, 1);
-            $period = PayrollPeriod::where('start_date', $date->startOfMonth())
-                ->first();
-            
-            return [
-                'id' => $period ? $period->id : $month,
-                'name' => $date->format('F Y'),
-                'start_date' => $date->startOfMonth()->format('Y-m-d'),
-                'end_date' => $date->endOfMonth()->format('Y-m-d'),
-                'is_unlocked' => $month <= $currentMonth,
-                'is_processed' => $period ? $period->status === 'completed' : false,
-                'status' => $period ? $period->status : 'pending'
-            ];
-        })->values();
+        $periods = collect();
+        
+        switch ($frequency) {
+            case 'monthly':
+                // Generate monthly periods
+                for ($month = 1; $month <= 12; $month++) {
+                    $date = Carbon::create($currentYear, $month, 1);
+                    $period = PayrollPeriod::firstOrCreate(
+                        [
+                            'start_date' => $date->copy()->startOfMonth(),
+                            'end_date' => $date->copy()->endOfMonth(),
+                            'frequency' => 'monthly',
+                        ],
+                        ['status' => 'pending']
+                    );
+                    
+                    $periods->push([
+                        'id' => $period->id,
+                        'name' => $this->formatPeriodName($period),
+                        'type' => 'Monthly',
+                        'start_date' => $period->start_date,
+                        'end_date' => $period->end_date,
+                        'is_processed' => $period->status === 'completed',
+                        'is_unlocked' => $period->start_date->isPast() && !$period->end_date->isFuture(),
+                    ]);
+                }
+                break;
+
+            case 'semi-monthly':
+                // Generate semi-monthly periods (1st-15th and 16th-end of month)
+                for ($month = 1; $month <= 12; $month++) {
+                    $date = Carbon::create($currentYear, $month, 1);
+                    
+                    // First half of the month
+                    $firstHalf = PayrollPeriod::firstOrCreate(
+                        [
+                            'start_date' => $date->copy()->startOfMonth(),
+                            'end_date' => $date->copy()->setDay(15),
+                            'frequency' => 'semi-monthly',
+                        ],
+                        ['status' => 'pending']
+                    );
+                    
+                    $periods->push([
+                        'id' => $firstHalf->id,
+                        'name' => $this->formatPeriodName($firstHalf),
+                        'type' => '1st Half',
+                        'start_date' => $firstHalf->start_date,
+                        'end_date' => $firstHalf->end_date,
+                        'is_processed' => $firstHalf->status === 'completed',
+                        'is_unlocked' => $firstHalf->start_date->isPast() && !$firstHalf->end_date->isFuture(),
+                    ]);
+
+                    // Second half of the month
+                    $secondHalf = PayrollPeriod::firstOrCreate(
+                        [
+                            'start_date' => $date->copy()->setDay(16),
+                            'end_date' => $date->copy()->endOfMonth(),
+                            'frequency' => 'semi-monthly',
+                        ],
+                        ['status' => 'pending']
+                    );
+                    
+                    $periods->push([
+                        'id' => $secondHalf->id,
+                        'name' => $this->formatPeriodName($secondHalf),
+                        'type' => '2nd Half',
+                        'start_date' => $secondHalf->start_date,
+                        'end_date' => $secondHalf->end_date,
+                        'is_processed' => $secondHalf->status === 'completed',
+                        'is_unlocked' => $secondHalf->start_date->isPast() && !$secondHalf->end_date->isFuture(),
+                    ]);
+                }
+                break;
+
+            case 'bi-weekly':
+                // Generate bi-weekly periods (every 14 days)
+                $startDate = Carbon::create($currentYear, 1, 1)->startOfWeek();
+                $endDate = Carbon::create($currentYear, 12, 31);
+                $periodCount = 1;
+
+                while ($startDate->lte($endDate)) {
+                    $periodEndDate = $startDate->copy()->addDays(13);
+                    
+                    $period = PayrollPeriod::firstOrCreate(
+                        [
+                            'start_date' => $startDate->copy(),
+                            'end_date' => $periodEndDate,
+                            'frequency' => 'bi-weekly',
+                        ],
+                        ['status' => 'pending']
+                    );
+                    
+                    $periods->push([
+                        'id' => $period->id,
+                        'name' => $this->formatPeriodName($period),
+                        'type' => "Period {$periodCount}",
+                        'start_date' => $period->start_date,
+                        'end_date' => $period->end_date,
+                        'is_processed' => $period->status === 'completed',
+                        'is_unlocked' => $period->start_date->isPast() && !$period->end_date->isFuture(),
+                    ]);
+
+                    $startDate->addDays(14);
+                    $periodCount++;
+                }
+                break;
+        }
+
+        return $periods->values();
     }
 
     private function getCurrentPayrollPeriod()
     {
         $period = PayrollPeriod::where('status', '!=', 'completed')
-            ->latest()
+            ->where('start_date', '<=', now())
+            ->where('end_date', '>=', now())
             ->first();
 
         if (!$period) {
-            // Create a new monthly period if none exists
-            $period = PayrollPeriod::create([
-                'start_date' => now()->startOfMonth(),
-                'end_date' => now()->endOfMonth(),
-                'frequency' => 'monthly',
-                'status' => 'pending'
-            ]);
+            // Create a new period based on current settings
+            $settings = PayrollPeriod::latest()->first();
+            $frequency = $settings ? $settings->frequency : 'monthly';
+            $period = PayrollPeriod::generateInitialPeriod($frequency);
         }
 
         return [
             'id' => $period->id,
-            'name' => Carbon::parse($period->start_date)->format('F Y'),
+            'name' => $this->formatPeriodName($period),
             'start_date' => $period->start_date,
             'end_date' => $period->end_date,
             'frequency' => $period->frequency,
             'is_automated' => $period->is_automated ?? false,
             'status' => $period->status
         ];
+    }
+
+    private function formatPeriodName($period)
+    {
+        $start = Carbon::parse($period->start_date);
+        $end = Carbon::parse($period->end_date);
+
+        switch ($period->frequency) {
+            case 'semi-monthly':
+                return $start->format('F ') . $start->day . '-' . $end->day . ', ' . $start->year;
+            case 'bi-weekly':
+                return $start->format('M j') . ' - ' . $end->format('M j, Y');
+            default:
+                return $start->format('F Y');
+        }
     }
 
     public function index()

@@ -7,296 +7,233 @@ import AllowancesModal from '@/Components/AllowancesModal.vue';
 import { ref, watch, computed } from 'vue';
 
 const props = defineProps({
-    employees: {
-        type: Array,
-        default: () => []
-    },
-    currentPeriod: {
-        type: Object,
-        required: true
-    },
-    frequencies: {
-        type: Object,
-        required: true
-    },
-    availablePeriods: {
-        type: Array,
-        default: () => []
-    }
+    employees: Array,
+    currentPeriod: Object,
+    availablePeriods: Array,
+    frequencies: Object
 });
 
 const selectedEmployee = ref(null);
-const showDetailsModal = ref(false);
-const showSettings = ref(false);
+const showPayrollDetails = ref(false);
 const selectedPeriod = ref(props.currentPeriod);
-const search = ref('');
 
-const settingsForm = useForm({
-    frequency: props.currentPeriod.frequency || 'monthly',
-    is_automated: props.currentPeriod.is_automated || false
+const form = useForm({
+    frequency: props.currentPeriod?.frequency || 'monthly',
+    is_automated: props.currentPeriod?.is_automated || false,
+    period_id: props.currentPeriod?.id
 });
 
-const openPayrollDetails = (employee) => {
-    selectedEmployee.value = employee;
-    showDetailsModal.value = true;
-};
+const filteredPeriods = computed(() => {
+    if (!props.availablePeriods) return [];
+    return props.availablePeriods.filter(period => {
+        const periodDate = new Date(period.start_date);
+        return periodDate.getFullYear() === new Date().getFullYear();
+    });
+});
 
-const closePayrollDetails = () => {
-    showDetailsModal.value = false;
-    selectedEmployee.value = null;
-};
-
-const handleAllowancesUpdated = () => {
-    window.location.reload();
+const updateSettings = () => {
+    form.post(route('payroll.settings'), {
+        preserveScroll: true,
+        onSuccess: () => {
+            // Handle success
+        },
+    });
 };
 
 const processPayroll = () => {
-    if (!confirm('Are you sure you want to process the payroll for this period?')) return;
+    if (!selectedPeriod.value) return;
     
-    useForm({
-        period_id: selectedPeriod.value.id
-    }).post(route('payroll.process'), {
+    form.post(route('payroll.process'), {
+        preserveScroll: true,
+        data: {
+            period_id: selectedPeriod.value.id
+        },
         onSuccess: () => {
-            window.location.reload();
-        }
+            // Handle success
+        },
     });
 };
 
-const updateSettings = () => {
-    settingsForm.post(route('payroll.settings'), {
-        onSuccess: () => {
-            showSettings.value = false;
-        }
-    });
+watch(() => form.frequency, (newFrequency) => {
+    updateSettings();
+});
+
+const showDetails = (employee) => {
+    selectedEmployee.value = employee;
+    showPayrollDetails.value = true;
 };
-
-watch(selectedEmployee, (newVal) => {
-    if (newVal) {
-        console.log('Selected employee data:', newVal);
-    }
-});
-
-// Add computed property for total net pay
-const totalNetPay = computed(() => {
-    return props.employees.reduce((total, employee) => {
-        const netPay = employee?.salary?.monthly?.net ?? 0;
-        return total + netPay;
-    }, 0);
-});
-
-const totalPayroll = computed(() => {
-    return props.employees.reduce((total, employee) => {
-        // Safely access nested properties
-        const netPay = employee?.salary?.monthly?.net ?? 0;
-        return total + netPay;
-    }, 0);
-});
-
-const filteredEmployees = computed(() => {
-    if (!search.value) return props.employees;
-    return props.employees.filter(employee =>
-        employee.name.toLowerCase().includes(search.value.toLowerCase())
-    );
-});
 
 const formatCurrency = (value) => {
-    return new Intl.NumberFormat('en-PH', { style: 'currency', currency: 'PHP' }).format(value);
-};
-
-const getTotalAllowances = (employee) => {
-    try {
-        if (!employee?.salary?.allowances) return 0;
-        const allowances = employee.salary.allowances;
-        if (typeof allowances !== 'object') return 0;
-        return Object.values(allowances).reduce((total, amount) => total + (Number(amount) || 0), 0);
-    } catch (error) {
-        console.error('Error calculating allowances:', error);
-        return 0;
-    }
-};
-
-const getTotalDeductions = (employee) => {
-    try {
-        if (!employee?.salary?.deductions) return 0;
-        const deductions = employee.salary.deductions;
-        if (typeof deductions !== 'object') return 0;
-        return Object.values(deductions).reduce((total, amount) => total + (Number(amount) || 0), 0);
-    } catch (error) {
-        console.error('Error calculating deductions:', error);
-        return 0;
-    }
+    return new Intl.NumberFormat('en-PH', {
+        style: 'currency',
+        currency: 'PHP'
+    }).format(value || 0);
 };
 </script>
 
 <template>
-    <Head title="Payroll Management" />
-
     <AuthenticatedLayout>
-        <div class="min-h-screen bg-background p-6">
-            <!-- Header with actions -->
-            <div class="mb-8">
-                <div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 mb-6">
-                    <div>
-                        <h1 class="text-3xl font-bold text-foreground">Payroll Management</h1>
-                        <p class="mt-1 text-muted-foreground">Process and manage employee payroll records</p>
-                    </div>
-                    <div class="flex flex-col sm:flex-row gap-3">
-                        <select
-                            v-model="selectedPeriod"
-                            class="px-4 py-2 text-sm font-medium bg-white border border-border rounded-lg shadow-sm hover:bg-accent/5 focus:outline-none focus:ring-2 focus:ring-primary/50"
-                        >
-                            <option
-                                v-for="period in availablePeriods"
-                                :key="period.id"
-                                :value="period"
-                                :disabled="!period.is_unlocked"
-                            >
-                                {{ period.name }}
-                            </option>
-                        </select>
-                        <button
-                            @click="processPayroll"
-                            class="px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:opacity-90 transition-colors font-medium"
-                        >
-                            Process Payroll
-                        </button>
-                    </div>
+        <Head title="Payroll Management" />
+
+        <div class="py-12">
+            <div class="max-w-7xl mx-auto sm:px-6 lg:px-8 space-y-8">
+                <!-- Page Header -->
+                <div class="flex flex-col gap-2">
+                    <h1 class="text-2xl font-bold tracking-tight">Payroll Management</h1>
+                    <p class="text-muted-foreground">Manage and process payroll for all employees</p>
                 </div>
 
-                <!-- Quick Stats -->
-                <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                    <Card class="p-4 bg-primary/5">
-                        <h3 class="text-sm font-medium text-muted-foreground">Total Employees</h3>
-                        <p class="text-2xl font-bold mt-1">{{ filteredEmployees.length }}</p>
+                <div class="grid md:grid-cols-2 gap-6">
+                    <!-- Payroll Settings Card -->
+                    <Card class="md:col-span-1">
+                        <div class="p-6">
+                            <div class="space-y-4">
+                                <div>
+                                    <h2 class="text-lg font-semibold leading-none tracking-tight">Payroll Settings</h2>
+                                    <p class="text-sm text-muted-foreground mt-1">Configure payroll frequency and automation</p>
+                                </div>
+                                <div class="space-y-4">
+                                    <div class="space-y-2">
+                                        <label class="text-sm font-medium">Frequency</label>
+                                        <select
+                                            v-model="form.frequency"
+                                            class="w-full rounded-md border-input bg-background px-3 py-2 text-sm shadow-sm transition-colors"
+                                        >
+                                            <option v-for="(label, value) in frequencies" :key="value" :value="value">
+                                                {{ label }}
+                                            </option>
+                                        </select>
+                                    </div>
+                                    
+                                    <label class="flex items-center gap-3 cursor-pointer">
+                                        <input
+                                            type="checkbox"
+                                            v-model="form.is_automated"
+                                            class="rounded border-input w-4 h-4"
+                                            @change="updateSettings"
+                                        />
+                                        <span class="text-sm font-medium">Enable Automated Processing</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
                     </Card>
-                    <Card class="p-4 bg-green-50">
-                        <h3 class="text-sm font-medium text-muted-foreground">Total Net Payroll</h3>
-                        <p class="text-2xl font-bold mt-1 text-green-600">{{ formatCurrency(totalPayroll) }}</p>
-                    </Card>
-                    <Card class="p-4 bg-blue-50">
-                        <h3 class="text-sm font-medium text-muted-foreground">Average Salary</h3>
-                        <p class="text-2xl font-bold mt-1 text-blue-600">
-                            {{ formatCurrency(totalPayroll / filteredEmployees.length || 0) }}
-                        </p>
-                    </Card>
-                    <Card class="p-4 bg-accent/10">
-                        <h3 class="text-sm font-medium text-muted-foreground">Pay Period</h3>
-                        <p class="text-2xl font-bold mt-1">{{ selectedPeriod?.frequency || 'Monthly' }}</p>
+
+                    <!-- Payroll Period Selection -->
+                    <Card class="md:col-span-1">
+                        <div class="p-6">
+                            <div class="space-y-4">
+                                <div>
+                                    <h2 class="text-lg font-semibold leading-none tracking-tight">Payroll Period</h2>
+                                    <p class="text-sm text-muted-foreground mt-1">Select and process payroll for a specific period</p>
+                                </div>
+                                <div class="space-y-4">
+                                    <div class="space-y-2">
+                                        <label class="text-sm font-medium">Select Period</label>
+                                        <select
+                                            v-model="selectedPeriod"
+                                            class="w-full rounded-md border-input bg-background px-3 py-2 text-sm shadow-sm"
+                                        >
+                                            <option v-for="period in filteredPeriods" 
+                                                    :key="period.id" 
+                                                    :value="period"
+                                                    :disabled="period.is_processed || !period.is_unlocked">
+                                                {{ period.name }}
+                                                <span class="text-muted-foreground">
+                                                    {{ period.is_processed ? '(Processed)' : !period.is_unlocked ? '(Locked)' : '' }}
+                                                </span>
+                                            </option>
+                                        </select>
+                                    </div>
+                                    
+                                    <button
+                                        @click="processPayroll"
+                                        class="w-full inline-flex items-center justify-center px-4 py-2.5 bg-primary text-primary-foreground font-semibold text-sm tracking-wide transition ease-in-out duration-150 rounded-md hover:bg-primary/90 disabled:opacity-50"
+                                        :disabled="!selectedPeriod || selectedPeriod.is_processed || !selectedPeriod.is_unlocked || form.processing"
+                                    >
+                                        <template v-if="form.processing">
+                                            <svg class="animate-spin -ml-1 mr-2 h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                                                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                                            </svg>
+                                            Processing...
+                                        </template>
+                                        <template v-else>
+                                            Process Payroll
+                                        </template>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
                     </Card>
                 </div>
-            </div>
 
-            <!-- Main Content -->
-            <Card class="overflow-hidden">
-                <!-- Search and filters -->
-                <div class="p-4 border-b border-border">
-                    <div class="flex items-center gap-4">
-                        <div class="flex-1">
-                            <input
-                                v-model="search"
-                                type="text"
-                                placeholder="Search employees..."
-                                class="w-full px-4 py-2 text-sm border border-border rounded-lg focus:outline-none focus:ring-2 focus:ring-primary/50"
-                            />
+                <!-- Employees List -->
+                <Card>
+                    <div class="p-6">
+                        <div class="flex items-center justify-between mb-6">
+                            <div>
+                                <h3 class="text-lg font-semibold leading-none tracking-tight">Employee Payroll Summary</h3>
+                                <p class="text-sm text-muted-foreground mt-1">Overview of employee compensation details</p>
+                            </div>
+                        </div>
+
+                        <div class="overflow-x-auto rounded-lg border">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="bg-muted/50 border-b">
+                                        <th class="px-6 py-3.5 text-left text-xs font-semibold text-muted-foreground uppercase tracking-wider">Employee</th>
+                                        <th class="px-6 py-3.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Basic Pay</th>
+                                        <th class="px-6 py-3.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Allowances</th>
+                                        <th class="px-6 py-3.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Deductions</th>
+                                        <th class="px-6 py-3.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider">Net Pay</th>
+                                        <th class="px-6 py-3.5 text-right text-xs font-semibold text-muted-foreground uppercase tracking-wider w-24"></th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y">
+                                    <tr v-for="employee in employees" 
+                                        :key="employee.id"
+                                        class="hover:bg-muted/50 transition-colors">
+                                        <td class="px-6 py-4 whitespace-nowrap">
+                                            <div class="flex flex-col">
+                                                <span class="font-medium">{{ employee.name }}</span>
+                                                <span class="text-sm text-muted-foreground">{{ employee.employeeId }}</span>
+                                            </div>
+                                        </td>
+                                        <td class="px-6 py-4 text-right whitespace-nowrap font-medium">
+                                            {{ formatCurrency(employee.salary.basic) }}
+                                        </td>
+                                        <td class="px-6 py-4 text-right whitespace-nowrap font-medium">
+                                            {{ formatCurrency(Object.values(employee.salary.allowances).reduce((a, b) => a + b, 0)) }}
+                                        </td>
+                                        <td class="px-6 py-4 text-right whitespace-nowrap font-medium text-red-500">
+                                            -{{ formatCurrency(employee.salary.monthly.deductions) }}
+                                        </td>
+                                        <td class="px-6 py-4 text-right whitespace-nowrap font-bold">
+                                            {{ formatCurrency(employee.salary.monthly.net) }}
+                                        </td>
+                                        <td class="px-6 py-4 text-right whitespace-nowrap">
+                                            <button
+                                                @click="showDetails(employee)"
+                                                class="inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-9 px-3"
+                                            >
+                                                View Details
+                                            </button>
+                                        </td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
                     </div>
-                </div>
-
-                <!-- Table -->
-                <div class="overflow-x-auto">
-                    <table class="w-full">
-                        <thead class="bg-accent/5">
-                            <tr>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Employee</th>
-                                <th class="px-6 py-3 text-left text-xs font-medium text-muted-foreground uppercase tracking-wider">Position</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Basic</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Allowances</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Deductions</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Net Pay</th>
-                                <th class="px-6 py-3 text-right text-xs font-medium text-muted-foreground uppercase tracking-wider">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody class="divide-y divide-border">
-                            <tr v-for="employee in filteredEmployees" :key="employee.id" class="hover:bg-accent/5">
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="flex items-center">
-                                        <div>
-                                            <div class="font-medium text-foreground">{{ employee.name }}</div>
-                                            <div class="text-sm text-muted-foreground">ID: {{ employee.employeeId }}</div>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap">
-                                    <div class="text-sm text-foreground">{{ employee.position }}</div>
-                                    <div class="text-xs text-muted-foreground">{{ employee.department }}</div>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                                    {{ formatCurrency(employee.salary.basic) }}
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                    <span class="font-medium text-green-600">+{{ formatCurrency(getTotalAllowances(employee)) }}</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                    <span class="font-medium text-red-600">-{{ formatCurrency(getTotalDeductions(employee)) }}</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-right text-sm">
-                                    <span class="font-bold text-primary">{{ formatCurrency(employee.salary.monthly.net) }}</span>
-                                </td>
-                                <td class="px-6 py-4 whitespace-nowrap text-right">
-                                    <button
-                                        @click="openPayrollDetails(employee)"
-                                        class="text-primary hover:text-primary/80 font-medium text-sm"
-                                    >
-                                        View Details
-                                    </button>
-                                </td>
-                            </tr>
-                        </tbody>
-                        <tfoot v-if="filteredEmployees.length > 0" class="bg-accent/5 border-t border-border">
-                            <tr>
-                                <td colspan="2" class="px-6 py-4 text-sm font-medium">Totals</td>
-                                <td class="px-6 py-4 text-right text-sm font-medium">
-                                    {{ formatCurrency(filteredEmployees.reduce((sum, emp) => sum + emp.salary.basic, 0)) }}
-                                </td>
-                                <td class="px-6 py-4 text-right text-sm">
-                                    <span class="font-medium text-green-600">
-                                        +{{ formatCurrency(filteredEmployees.reduce((sum, emp) => sum + getTotalAllowances(emp), 0)) }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-right text-sm">
-                                    <span class="font-medium text-red-600">
-                                        -{{ formatCurrency(filteredEmployees.reduce((sum, emp) => sum + getTotalDeductions(emp), 0)) }}
-                                    </span>
-                                </td>
-                                <td class="px-6 py-4 text-right text-sm">
-                                    <span class="font-bold text-primary">{{ formatCurrency(totalPayroll) }}</span>
-                                </td>
-                                <td></td>
-                            </tr>
-                        </tfoot>
-                    </table>
-                </div>
-            </Card>
+                </Card>
+            </div>
         </div>
 
-        <!-- Modals -->
         <PayrollDetailsModal
-            :show="showDetailsModal"
+            :show="showPayrollDetails"
             :employee="selectedEmployee"
-            @close="closePayrollDetails"
-            @allowances-updated="handleAllowancesUpdated"
+            @close="showPayrollDetails = false"
+            @allowances-updated="$page.props.employees = employees"
         />
     </AuthenticatedLayout>
 </template>
-
-<style>
-.fade-enter-active,
-.fade-leave-active {
-    transition: opacity 0.3s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-    opacity: 0;
-}
-</style>
